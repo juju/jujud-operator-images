@@ -4,15 +4,15 @@
 set -euf
 
 BASE_DIR="$(realpath "$(dirname "$0")")"
-CACHE_DIR="${BASE_DIR}/_cache"
-BUILD_DIR="${BASE_DIR}/_build"
-DATA_DIR="${BASE_DIR}/_data"
+IMG_CACHE_DIR="${BASE_DIR}/_cache"
+IMG_BUILD_DIR="${BASE_DIR}/_build"
+IMG_DATA_DIR="${BASE_DIR}/_data"
 
 OCI_IMAGE_PLATFORMS=${OCI_IMAGE_PLATFORMS:-linux/amd64 linux/arm64 linux/s390x linux/ppc64el}
 
-mkdir -p "${CACHE_DIR}"
-mkdir -p "${BUILD_DIR}"
-mkdir -p "${DATA_DIR}"
+mkdir -p "${IMG_CACHE_DIR}"
+mkdir -p "${IMG_BUILD_DIR}"
+mkdir -p "${IMG_DATA_DIR}"
 
 juju_versions() {
   skip_versions=${1-""}
@@ -56,7 +56,7 @@ juju_versions() {
 
 already_cached() {
   ver=${1-""}
-  ver_cachedir="${CACHE_DIR}/${ver}"
+  ver_cachedir="${IMG_CACHE_DIR}/${ver}"
 
   for platform in ${OCI_IMAGE_PLATFORMS} ; do
     os=$(echo "${platform}" | cut -f1 -d/)
@@ -88,7 +88,7 @@ already_cached() {
 cache_version() {
   ver=${1-""}
   majmin=$(echo "${ver}" | cut -d. -f1-2)
-  ver_cachedir="${CACHE_DIR}/${ver}"
+  ver_cachedir="${IMG_CACHE_DIR}/${ver}"
   mkdir -p "${ver_cachedir}"
   
   for platform in ${OCI_IMAGE_PLATFORMS} ; do
@@ -129,13 +129,15 @@ prepare_build() {
     exit 1
   fi
 
-  ver_cachedir="${CACHE_DIR}/${ver}"
-  ver_builddir="${BUILD_DIR}/${ver}"
+  ver_cachedir="${IMG_CACHE_DIR}/${ver}"
+  ver_builddir="${IMG_BUILD_DIR}/${ver}"
 
   tmp=$(mktemp -d)
   rm -rf "${ver_builddir}" || true
   (cd "${tmp}" && tar -xf "${ver_cachedir}/juju-core_${ver}.tar.gz" && mv "$(dirname "$(find . -type f -name "go.mod" | head -n1)")" "${ver_builddir}")
   rm -rf "${tmp}"
+
+  ls -lah "${ver_builddir}"
 
   if grep "${ver}" < "${ver_builddir}/version/version.go" ; then
     echo "version/version.go has correct version"
@@ -175,8 +177,8 @@ validate_build() {
   cloud=${3-""}
   caas_image_repo=${4-""}
 
-  bins="${BUILD_DIR}/${ver}/_build/linux_amd64/bin"
-  data="${DATA_DIR}/${ver}"
+  bins="${IMG_BUILD_DIR}/${ver}/_build/linux_amd64/bin"
+  data="${IMG_DATA_DIR}/${ver}"
 
   mkdir -p "${data}"
 
