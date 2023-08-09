@@ -6,16 +6,23 @@ set -euf
 BASE_DIR=$(realpath "$(dirname "$0")")
 CACHE_DIR=${CACHE_DIR:-${BASE_DIR}/_cache}
 BUILD_DIR=${BUILD_DIR:-${BASE_DIR}/_build}
+DATA_DIR=${DATA_DIR:-${BASE_DIR}/_data}
 
 OCI_IMAGE_PLATFORMS=${OCI_IMAGE_PLATFORMS:-linux/amd64 linux/arm64 linux/s390x linux/ppc64el}
 
 mkdir -p "${CACHE_DIR}"
 mkdir -p "${BUILD_DIR}"
+mkdir -p "${DATA_DIR}"
 
 juju_versions() {
+  skip_versions=${1-""}
   candidates=$(curl "https://api.snapcraft.io/v2/snaps/info/juju?fields=version" -s -H "Snap-Device-Series: 16" | yq -o=t '."channel-map" | map(select(.channel.risk=="stable" and .channel.track!="latest")) | map(.version) | unique')
   chosen=()
   for ver in ${candidates} ; do
+    if [[ "${skip_versions}" == *"${ver}"* ]]; then
+      continue
+    fi
+
     if already_cached "${ver}" ; then
       chosen+=("${ver}")
       continue
@@ -67,11 +74,15 @@ already_cached() {
     return 1
   done
 
-  if [ -f "${ver_cachedir}/juju-core_${ver}.tar.gz" ]; then
-    return 0
+  if [ ! -f "${ver_cachedir}/juju-core_${ver}.tar.gz" ]; then
+    return 1
   fi
 
-  return 1
+  if [ ! -f "${ver_cachedir}/juju-${ver}-linux-amd64.tar.xz" ]; then
+    return 1
+  fi
+  
+  return 0
 }
 
 cache_version() {
@@ -102,6 +113,12 @@ cache_version() {
     echo "Found cached juju-core_${ver}.tar.gz"
   else
     (cd "${ver_cachedir}" && wget "https://launchpad.net/juju/${majmin}/${ver}/+download/juju-core_${ver}.tar.gz")
+  fi
+
+  if [ -f "${ver_cachedir}/juju-${ver}-linux-amd64.tar.xz" ]; then
+    echo "Found cached juju-${ver}-linux-amd64.tar.xz"
+  else
+    (cd "${ver_cachedir}" && wget "https://launchpad.net/juju/${majmin}/${ver}/+download/juju-${ver}-linux-amd64.tar.xz")
   fi
 }
 
@@ -141,8 +158,60 @@ prepare_build() {
     platform_bin_dir="${bbuild}/linux_${canonical_arch}/bin"
     mkdir -p "${platform_bin_dir}"
     (cd "${platform_bin_dir}" && tar -xf "${ver_cachedir}/juju-agents-${ver}-linux-${canonical_arch}.tar.xz")
+
+    if [ -f "${ver_cachedir}/juju-${ver}-linux-${canonical_arch}.tar.xz" ]; then
+      (cd "${platform_bin_dir}" && tar -xf "${ver_cachedir}/juju-${ver}-linux-${canonical_arch}.tar.xz")
+    fi
+    
     if [ "${canonical_arch}" != "${arch}" ]; then
       cp -r "${bbuild}/${os}_${canonical_arch}" "${bbuild}/${os}_${arch}"
-    fi    
+    fi
   done
+}
+
+validate_build() {
+  ver=${1-""}
+  image=${2-""}
+  cloud=${3-""}
+  caas_image_repo=${4-""}
+
+  bins="${BUILD_DIR}/${ver}/_build/linux_amd64/bin"
+  data="${DATA_DIR}/${ver}"
+
+  mkdir -p "${data}"
+
+  if [ "${cloud}-$(uname -s)" = "microk8s-Darwin" ]; then
+    tmp_docker_image="/tmp/juju-operator-image-${ver}.image"
+    docker save "${image}" | multipass transfer - microk8s-vm:${tmp_docker_image}
+    microk8s ctr --namespace k8s.io image import ${tmp_docker_image}
+    multipass exec microk8s-vm rm "${tmp_docker_image}"
+  elif [ "${cloud}" = "microk8s" ]; then
+    docker save "${image}" | microk8s.ctr --namespace k8s.io image import -
+  elif [ "${cloud}" = "minikube" ]; then
+    docker save "${image}" | minikube image load --overwrite=true - 
+  else
+	  echo "${cloud} is not a supported local k8s"
+    exit 1
+  fi
+
+  echo "Using JUJU_DATA=${data} ${bins}/juju"
+  PATH="${bins}:${PATH}" JUJU_DATA="${data}" test_bootstrap "${cloud}" "${caas_image_repo}"
+}
+
+test_bootstrap() {
+  cloud=${1-""}
+  caas_image_repo=${2-""}
+
+  controller="test-$(echo "$RANDOM" | sha1sum | head -c 6)"
+  model="model-$(echo "$RANDOM" | sha1sum | head -c 6)"
+  echo "$(juju --version) ${controller} ${model}"
+  juju bootstrap "${cloud}" "${controller}" --config caas-image-repo="${caas_image_repo}"
+  juju add-model "${model}"
+  juju deploy snappass-test
+  juju wait-for application snappass-test
+  yes=""
+  if juju destroy-controller --help | grep -e "--yes"; then
+    yes="--yes"
+  fi
+  juju destroy-controller ${yes} --no-prompt --destroy-storage --destroy-all-models --force "${controller}"
 }
