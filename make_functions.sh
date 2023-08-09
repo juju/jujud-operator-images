@@ -134,7 +134,7 @@ prepare_build() {
 
   tmp=$(mktemp -d)
   rm -rf "${ver_builddir}" || true
-  (cd "${tmp}" && tar -xf "${ver_cachedir}/juju-core_${ver}.tar.gz" && mv "$(dirname "$(find . -type f -name "go.mod" | head -n1)")" "${ver_builddir}")
+  (cd "${tmp}" && tar -xf "${ver_cachedir}/juju-core_${ver}.tar.gz" && mv "$(dirname "$(find . -type f -name "go.mod" | awk --field-separator="/" '{ print NF, $0 }' | sort -n | head -n1 | cut -f2 -d" ")")" "${ver_builddir}")
   rm -rf "${tmp}"
 
   ls -lah "${ver_builddir}"
