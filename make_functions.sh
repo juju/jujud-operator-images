@@ -3,10 +3,10 @@
 # Licensed under the AGPLv3, see LICENCE file for details.
 set -euf
 
-BASE_DIR=$(realpath "$(dirname "$0")")
-CACHE_DIR=${CACHE_DIR:-${BASE_DIR}/_cache}
-BUILD_DIR=${BUILD_DIR:-${BASE_DIR}/_build}
-DATA_DIR=${DATA_DIR:-${BASE_DIR}/_data}
+BASE_DIR="$(realpath "$(dirname "$0")")"
+CACHE_DIR="${BASE_DIR}/_cache"
+BUILD_DIR="${BASE_DIR}/_build"
+DATA_DIR="${BASE_DIR}/_data"
 
 OCI_IMAGE_PLATFORMS=${OCI_IMAGE_PLATFORMS:-linux/amd64 linux/arm64 linux/s390x linux/ppc64el}
 
