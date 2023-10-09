@@ -9,7 +9,7 @@ VALIDATE_BUILD=bash -c '. "./make_functions.sh"; validate_build "$$@"' validate_
 
 VERSIONS ?= $(shell $(JUJU_VERSIONS) $(SKIP_VERSIONS))
 OCI_IMAGE_PLATFORMS ?= linux/amd64 linux/arm64 linux/s390x linux/ppc64el
-DOCKER_USERNAME ?= jujusolutions
+OCI_REPOSITORIES ?= public.ecr.aws/juju ghcr.io/juju docker.io/jujusolutions
 BOOTSTRAP_CLOUD ?= minikube
 
 default: build
@@ -30,12 +30,12 @@ local: $(VERSIONS)
 validate: $(addprefix _validate/,$(VERSIONS))
 
 _validate/%: local
-	$(VALIDATE_BUILD) "$(@:_validate/%=%)" "$(DOCKER_USERNAME)/jujud-operator:$(@:_validate/%=%)" "$(BOOTSTRAP_CLOUD)" "$(DOCKER_USERNAME)"
+	$(VALIDATE_BUILD) "$(@:_validate/%=%)" "$(wordlist 1, 1, $(OCI_REPOSITORIES))/jujud-operator:$(@:_validate/%=%)" "$(BOOTSTRAP_CLOUD)" "$(wordlist 1, 1, $(OCI_REPOSITORIES))"
 
 %:
 	$(CACHE_VERSION) "$@"
 	$(PREPARE_BUILD) "$@"
-	+cd "_build/$@/" && $(MAKE) $(SUBMAKE_TARGET) OPERATOR_IMAGE_BUILD_SRC=false OCI_IMAGE_PLATFORMS="$(OCI_IMAGE_PLATFORMS)" DOCKER_USERNAME="$(DOCKER_USERNAME)"
+	+cd "_build/$@/" && $(foreach DOCKER_USERNAME,$(OCI_REPOSITORIES),$(MAKE) $(SUBMAKE_TARGET) OPERATOR_IMAGE_BUILD_SRC=false OCI_IMAGE_PLATFORMS="$(OCI_IMAGE_PLATFORMS)" DOCKER_USERNAME="$(DOCKER_USERNAME)";)
 
 check:
 	shellcheck ./*.sh
