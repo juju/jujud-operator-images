@@ -15,27 +15,39 @@ BOOTSTRAP_CLOUD ?= minikube
 default: build
 
 release: validate
+## release: validate and push
 	+$(MAKE) push
 
 build: SUBMAKE_TARGET = "operator-image"
 build: $(VERSIONS)
+## push: for all VERSIONS build the operator-image target.
 
 push: SUBMAKE_TARGET = "push-release-operator-image"
 push: $(VERSIONS)
+## push: for all VERSIONS build the push-release-operator-image target.
 
 local: SUBMAKE_TARGET = "operator-image"
 local: OCI_IMAGE_PLATFORMS = linux/amd64
 local: $(VERSIONS)
+## local: for all VERSIONS build the operator-image target with the local platform.
 
 validate: $(addprefix _validate/,$(VERSIONS))
+## validate: validate all VERSIONS
 
+_validate/%: TEST_REPOSITORY=$(wordlist 1, 1, $(OCI_REPOSITORIES))
+_validate/%: VERSION=$(@:_validate/%=%)
 _validate/%: local
-	$(VALIDATE_BUILD) "$(@:_validate/%=%)" "$(wordlist 1, 1, $(OCI_REPOSITORIES))/jujud-operator:$(@:_validate/%=%)" "$(BOOTSTRAP_CLOUD)" "$(wordlist 1, 1, $(OCI_REPOSITORIES))"
+## _validate/%: validates a version of juju for the first repository.
+	$(VALIDATE_BUILD) "$(VERSION)" "$(TEST_REPOSITORY)/jujud-operator:$(VERSION)" "$(BOOTSTRAP_CLOUD)" "$(TEST_REPOSITORY)"
 
 %:
+## %: SUBMAKE_TARGET a version of juju for each repository.
 	$(CACHE_VERSION) "$@"
 	$(PREPARE_BUILD) "$@"
-	+cd "_build/$@/" && $(foreach DOCKER_USERNAME,$(OCI_REPOSITORIES),$(MAKE) $(SUBMAKE_TARGET) OPERATOR_IMAGE_BUILD_SRC=false OCI_IMAGE_PLATFORMS="$(OCI_IMAGE_PLATFORMS)" DOCKER_USERNAME="$(DOCKER_USERNAME)";)
+	+cd "_build/$@/" && \
+	$(foreach DOCKER_USERNAME,$(OCI_REPOSITORIES),\
+		$(MAKE) $(SUBMAKE_TARGET) OPERATOR_IMAGE_BUILD_SRC=false OCI_IMAGE_PLATFORMS="$(OCI_IMAGE_PLATFORMS)" DOCKER_USERNAME="$(DOCKER_USERNAME)";\
+	)
 
 check:
 	shellcheck ./*.sh
