@@ -7,8 +7,12 @@ BASE_DIR="$(realpath "$(dirname "$0")")"
 IMG_CACHE_DIR="${BASE_DIR}/_cache"
 IMG_BUILD_DIR="${BASE_DIR}/_build"
 IMG_DATA_DIR="${BASE_DIR}/_data"
+PATCH_DIR="${BASE_DIR}/patches"
 
+OCI_BUILDER=${OCI_BUILDER:-docker}
 OCI_IMAGE_PLATFORMS=${OCI_IMAGE_PLATFORMS:-linux/amd64 linux/arm64 linux/s390x linux/ppc64el}
+
+DOCKER_BIN=${DOCKER_BIN:-$(which ${OCI_BUILDER} || true)}
 
 mkdir -p "${IMG_CACHE_DIR}"
 mkdir -p "${IMG_BUILD_DIR}"
@@ -106,19 +110,19 @@ cache_version() {
       continue
     fi
 
-    (cd "${ver_cachedir}" && wget "https://launchpad.net/juju/${majmin}/${ver}/+download/juju-agents-${ver}-linux-${canonical_arch}.tar.xz")
+    (cd "${ver_cachedir}" && wget --no-verbose "https://launchpad.net/juju/${majmin}/${ver}/+download/juju-agents-${ver}-linux-${canonical_arch}.tar.xz")
   done
 
   if [ -f "${ver_cachedir}/juju-core_${ver}.tar.gz" ]; then
     echo "Found cached juju-core_${ver}.tar.gz"
   else
-    (cd "${ver_cachedir}" && wget "https://launchpad.net/juju/${majmin}/${ver}/+download/juju-core_${ver}.tar.gz")
+    (cd "${ver_cachedir}" && wget --no-verbose "https://launchpad.net/juju/${majmin}/${ver}/+download/juju-core_${ver}.tar.gz")
   fi
 
   if [ -f "${ver_cachedir}/juju-${ver}-linux-amd64.tar.xz" ]; then
     echo "Found cached juju-${ver}-linux-amd64.tar.xz"
   else
-    (cd "${ver_cachedir}" && wget "https://launchpad.net/juju/${majmin}/${ver}/+download/juju-${ver}-linux-amd64.tar.xz")
+    (cd "${ver_cachedir}" && wget --no-verbose "https://launchpad.net/juju/${majmin}/${ver}/+download/juju-${ver}-linux-amd64.tar.xz")
   fi
 }
 
@@ -144,6 +148,10 @@ prepare_build() {
   else
     echo "version/version.go source does not match version"
     exit 1
+  fi
+
+  if [ -e "${PATCH_DIR}/${ver}/make_functions.sh.patch" ]; then
+    patch "${ver_builddir}/make_functions.sh" "${PATCH_DIR}/${ver}/make_functions.sh.patch"
   fi
 
   bbuild="${ver_builddir}/_build"
@@ -184,13 +192,13 @@ validate_build() {
 
   if [ "${cloud}-$(uname -s)" = "microk8s-Darwin" ]; then
     tmp_docker_image="/tmp/juju-operator-image-${ver}.image"
-    docker save "${image}" | multipass transfer - microk8s-vm:${tmp_docker_image}
+    ${DOCKER_BIN} save "${image}" | multipass transfer - microk8s-vm:${tmp_docker_image}
     microk8s ctr --namespace k8s.io image import ${tmp_docker_image}
     multipass exec microk8s-vm rm "${tmp_docker_image}"
   elif [ "${cloud}" = "microk8s" ]; then
-    docker save "${image}" | microk8s.ctr --namespace k8s.io image import -
+    ${DOCKER_BIN} save "${image}" | microk8s.ctr --namespace k8s.io image import -
   elif [ "${cloud}" = "minikube" ]; then
-    docker save "${image}" | minikube image load --overwrite=true - 
+    ${DOCKER_BIN} save "${image}" | minikube image load --overwrite=true - 
   else
 	  echo "${cloud} is not a supported local k8s"
     exit 1

@@ -1,0 +1,11 @@
+137a138,139
+>         "$DOCKER_BIN" manifest rm "$(operator_image_path)" || true
+>         "$DOCKER_BIN" manifest create "$(operator_image_path)"
+141c143
+<             -t "$(operator_image_path)" \
+---
+>             --manifest "$(operator_image_path)" \
+145c147
+<             "$DOCKER_BIN" push "$(operator_image_path)"
+---
+>             "$DOCKER_BIN" manifest push -f v2s2 "$(operator_image_path)"

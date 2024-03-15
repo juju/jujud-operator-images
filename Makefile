@@ -11,6 +11,7 @@ VERSIONS ?= $(shell $(JUJU_VERSIONS) $(SKIP_VERSIONS))
 OCI_IMAGE_PLATFORMS ?= linux/amd64 linux/arm64 linux/s390x linux/ppc64el
 OCI_REPOSITORIES ?= public.ecr.aws/juju ghcr.io/juju docker.io/jujusolutions
 BOOTSTRAP_CLOUD ?= minikube
+export OCI_BUILDER ?= $(shell (which podman 2>&1 > /dev/null && echo podman) || echo docker )
 
 default: build
 
