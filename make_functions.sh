@@ -223,5 +223,6 @@ test_bootstrap() {
   if juju destroy-controller --help | grep -e "--yes"; then
     yes="--yes"
   fi
-  juju destroy-controller ${yes} --no-prompt --destroy-storage --destroy-all-models --force "${controller}"
+  #juju destroy-controller ${yes} --no-prompt --destroy-storage --destroy-all-models --force "${controller}"
+  juju kill-controller ${yes} --no-prompt --timeout 1m "${controller}"
 }
