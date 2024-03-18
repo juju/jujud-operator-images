@@ -8,4 +8,4 @@
 145c147
 <             "$DOCKER_BIN" push "$(operator_image_path)"
 ---
->             "$DOCKER_BIN" manifest push -f v2s2 "$(operator_image_path)"
+>             "$DOCKER_BIN" manifest push -f v2s2 "$(operator_image_path)" "docker://$(operator_image_path)"
